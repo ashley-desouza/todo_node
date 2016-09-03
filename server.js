@@ -8,11 +8,14 @@ const PORT = process.env.PORT || 3000;
 // List of Todos
 let todos = [{
 	description: 'Get Started',
-	completed: false
+	completed: true
 }, {
 	description: 'Clear Things',
-	completed: true
-}];
+	completed: false
+}, {
+	description: 'Restart',
+	completed: false
+];
 
 app.get('/', (req, res) => {
 	res.send('<h1>Todo App.</h1>');
