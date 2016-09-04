@@ -19,7 +19,21 @@ app.get('/todos', (req, res) => {
 	// res.writeHead(200, {'Content-type': 'text/html'});
 	// res.write(JSON.stringify(todos));
 	// res.end('<h1>Todo App.</h1>');
-	res.json(todos);
+	let queryParams = req.query;
+	let filteredTodos = todos;
+
+	// http://underscorejs.org/#where
+	if (queryParams.hasOwnProperty('completed') && queryParams.completed === 'true') {
+		filteredTodos = _.where(filteredTodos, {completed: true});
+	} else if (queryParams.hasOwnProperty('completed') && queryParams.completed === 'false') {
+		filteredTodos = _.where(filteredTodos, {completed: false});
+	}
+
+	if (queryParams.hasOwnProperty('q') && queryParams.q.length) {
+		// http://underscorejs.org/#filter
+		filteredTodos = _.filter(filteredTodos, (todo) => todo.description.toLowerCase().includes(queryParams.q.toLowerCase()));
+	}
+	res.json(filteredTodos);
 });
 
 // GET a todo item by id
