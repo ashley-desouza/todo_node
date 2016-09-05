@@ -3,6 +3,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const _ = require('underscore');
+const db = require('./db.js');
 
 const app = express();
 
@@ -19,36 +20,40 @@ app.get('/todos', (req, res) => {
 	// res.writeHead(200, {'Content-type': 'text/html'});
 	// res.write(JSON.stringify(todos));
 	// res.end('<h1>Todo App.</h1>');
-	let queryParams = req.query;
-	let filteredTodos = todos;
+	let query = req.query,
+		where = {};
 
-	// http://underscorejs.org/#where
-	if (queryParams.hasOwnProperty('completed') && queryParams.completed === 'true') {
-		filteredTodos = _.where(filteredTodos, {completed: true});
-	} else if (queryParams.hasOwnProperty('completed') && queryParams.completed === 'false') {
-		filteredTodos = _.where(filteredTodos, {completed: false});
+	// http://docs.sequelizejs.com/en/latest/docs/models-usage/#findall-search-for-multiple-elements-in-the-database
+	if (query.hasOwnProperty('completed') && query.completed === 'true') {
+		where.completed = true;
+	} else if (query.hasOwnProperty('completed') && query.completed === 'false') {
+		where.completed = false;
 	}
 
-	if (queryParams.hasOwnProperty('q') && queryParams.q.length) {
-		// http://underscorejs.org/#filter
-		filteredTodos = _.filter(filteredTodos, (todo) => todo.description.toLowerCase().includes(queryParams.q.toLowerCase()));
+	if (query.hasOwnProperty('q') && query.q.length) {
+		where.description = {
+			$like: `%${query.q}%`
+		};
 	}
-	res.json(filteredTodos);
+
+	db.todo.findAll({ where })
+		.then(todos => res.json(todos))
+		.catch(err => res.status(500).send());
 });
 
 // GET a todo item by id
 app.get('/todos/:id', (req, res) => {
 	let todoId = parseInt(req.params.id, 10);
-	let matchedTodo;
 
-	// http://underscorejs.org/#findWhere
-	matchedTodo = _.findWhere(todos, {id: todoId});
-
-	if (matchedTodo) {
-		res.send(matchedTodo);
-	} else {
-		res.status(404).json({"error": `No todo item found with Id: ${todoId}`});
-	}
+	// http://docs.sequelizejs.com/en/latest/docs/models-usage/#data-retrieval-finders
+	db.todo.findById(todoId)
+		.then(todo => {
+			if (todo) {
+				res.json(todo);
+			} else {
+				res.status(404).json({"error": `No todo item found with Id: ${todoId}`});
+			}			
+		})
 });
 
 // POST a new todo item
@@ -62,12 +67,11 @@ app.post('/todos', (req, res) => {
 		http://underscorejs.org/#isString
 	*/
 	if (_.isBoolean(body.completed) && _.isString(body.description) && body.description.trim().length) {
-		body.id = todoGlobalId++;
 		body.description = body.description.trim();
 
-		todos.push(body);
-
-		res.json(body);		
+		db.todo.create(body)
+			.then(todo => res.json(todo))
+			.catch(err => res.status(500).json(err));
 	} else {
 		res.status(400).send();
 	}
@@ -118,6 +122,10 @@ app.put('/todos/:id', (req, res) => {
 	res.json(matchedTodo[0]);
 });
 
-app.listen(PORT, () => {
-	console.log(`Listening on port ${PORT}`);
-});
+// IMP: Setup the db connection before starting the server
+db.todo.sync()
+	.then(() => {
+		app.listen(PORT, () => {
+			console.log(`Listening on port ${PORT}`);
+		});
+	});
