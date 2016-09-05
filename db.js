@@ -2,11 +2,11 @@
 
 const Sequelize = require('sequelize');
 const env = process.env.NODE_ENV || 'development'; // NODE_ENV is assigned 'production' on heroku
-const sequelize;
+let sequelize;
 
 if (env === 'production') {
 	sequelize = new Sequelize(process.env.DATABASE_URL, {
-		dialect: 'postgres'
+		'dialect': 'postgres'
 	});
 } else {
 	sequelize = new Sequelize(undefined, undefined, undefined, {
