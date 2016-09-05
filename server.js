@@ -8,10 +8,6 @@ const db = require('./db.js');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
-let todoGlobalId = 1;
-
-// List of Todos
-let todos = [];
 
 app.use(bodyParser.json());
 
@@ -81,45 +77,51 @@ app.post('/todos', (req, res) => {
 
 // DELETE a todo item
 app.delete('/todos/:id', (req, res) => {
-	let todoId = parseInt(req.params.id, 10),
-		matchedTodo = todos.filter(todo => todo.id === todoId);
+	let todoId = parseInt(req.params.id, 10);
 
-	if (matchedTodo.length) {
-		todos = todos.filter(todo => todo.id !== todoId);
-		 res.json(matchedTodo);		
-	} else {
-		res.status(404).json({"error": `No todo item found with Id: ${todoId}`});
-	}
+	// http://docs.sequelizejs.com/en/latest/api/model/#destroyoptions-promiseinteger
+	db.todo.destroy({
+		where: { id: todoId }
+	})
+	.then(numRowsDeleted => {
+		if (numRowsDeleted) {
+			res.status(204).send()
+		} else {
+			res.status(404).json({"error": `No todo item found with Id: ${todoId}`});
+		}
+	})
+	.catch(err => res.status(500).send());
 });
 
 // PUT for a todo item
 app.put('/todos/:id', (req, res) => {
-	let todoId = parseInt(req.params.id, 10),
-		matchedTodo = todos.filter(todo => todo.id === todoId);
+	let todoId = parseInt(req.params.id, 10);
 
 	// Ensure only specific attributes from the body are retreived
 	let body = _.pick(req.body, 'description', 'completed'); //http://underscorejs.org/#pick
-
-	if (!matchedTodo.length) {
-		return res.status(404).json({"error": `No todo item found with Id: ${todoId}`});
-	}
+	let attributes = {};
 
 	// Data Validation
-	if (body.hasOwnProperty('description') && _.isString(body.description) && body.description.trim().length) {
-		body.description = body.description.trim();	
-	} else if (body.hasOwnProperty('description')) {
-		return res.status(400).send();
+	if (body.hasOwnProperty('description')) {
+		attributes.description = body.description;	
 	}
 
-	if (body.hasOwnProperty('completed') && _.isBoolean(body.completed)) {
-		body.completed = body.completed;	
-	} else if (body.hasOwnProperty('completed')) {
-		return res.status(400).send();
+	if (body.hasOwnProperty('completed')) {
+		attributes.completed = body.completed;	
 	}
 
-	// http://underscorejs.org/#extend
-	_.extend(matchedTodo[0], body);
-	res.json(matchedTodo[0]);
+	db.todo.findById(todoId)
+		.then(todo => {
+			if (todo) {
+				// http://docs.sequelizejs.com/en/latest/api/instance/#updateupdates-options-promisethis
+				todo.update(attributes)
+					.then(result => res.json(result))
+					.catch(err => res.status(400).json(err));
+			} else {
+				res.status(404).json({"error": `No todo item found with Id: ${todoId}`});
+			}
+		})
+		.catch(err => res.status(500).send());
 });
 
 // IMP: Setup the db connection before starting the server
