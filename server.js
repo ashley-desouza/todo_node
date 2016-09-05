@@ -124,8 +124,18 @@ app.put('/todos/:id', (req, res) => {
 		.catch(err => res.status(500).send());
 });
 
+// POST a new user
+app.post('/users', (req, res) => {
+	let body = _.pick(req.body, 'email', 'password');
+
+	db.user.create(body)
+		.then(user => res.json(user))
+		.catch(err => res.status(400).json(err));
+
+});
+
 // IMP: Setup the db connection before starting the server
-db.todo.sync()
+db.sequelize.sync()
 	.then(() => {
 		app.listen(PORT, () => {
 			console.log(`Listening on port ${PORT}`);
