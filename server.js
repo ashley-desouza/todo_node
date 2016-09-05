@@ -4,6 +4,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const _ = require('underscore');
 const db = require('./db.js');
+const bcryptjs = require('bcryptjs');
 
 const app = express();
 
@@ -129,13 +130,21 @@ app.post('/users', (req, res) => {
 	let body = _.pick(req.body, 'email', 'password');
 
 	db.user.create(body)
-		.then(user => res.json(user))
+		.then(user => res.json(user.toPublicJSON()))
 		.catch(err => res.status(400).json(err));
+});
 
+// POST to login users
+app.post('/users/login', (req, res) => {
+	let body = _.pick(req.body, 'email', 'password');
+
+	db.user.authenticate(body)
+		.then(user => res.json(user))
+		.catch(err => res.status(401).send());
 });
 
 // IMP: Setup the db connection before starting the server
-db.sequelize.sync()
+db.sequelize.sync({force: true})
 	.then(() => {
 		app.listen(PORT, () => {
 			console.log(`Listening on port ${PORT}`);
