@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const _ = require('underscore');
 const db = require('./db.js');
 const bcryptjs = require('bcryptjs');
+const middleware = require('./middleware.js')(db);
 
 const app = express();
 
@@ -13,12 +14,14 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 
 // GET all todo items
-app.get('/todos', (req, res) => {
+app.get('/todos', middleware.authRequired, (req, res) => {
 	// res.writeHead(200, {'Content-type': 'text/html'});
 	// res.write(JSON.stringify(todos));
 	// res.end('<h1>Todo App.</h1>');
 	let query = req.query,
-		where = {};
+		where = {
+			userId: req.user.id
+		};
 
 	// http://docs.sequelizejs.com/en/latest/docs/models-usage/#findall-search-for-multiple-elements-in-the-database
 	if (query.hasOwnProperty('completed') && query.completed === 'true') {
@@ -39,11 +42,16 @@ app.get('/todos', (req, res) => {
 });
 
 // GET a todo item by id
-app.get('/todos/:id', (req, res) => {
+app.get('/todos/:id', middleware.authRequired, (req, res) => {
 	let todoId = parseInt(req.params.id, 10);
 
 	// http://docs.sequelizejs.com/en/latest/docs/models-usage/#data-retrieval-finders
-	db.todo.findById(todoId)
+	db.todo.findOne({
+			where: { 
+				userId: req.user.id, 
+				id: todoId 
+			}
+		})
 		.then(todo => {
 			if (todo) {
 				res.json(todo);
@@ -54,7 +62,7 @@ app.get('/todos/:id', (req, res) => {
 });
 
 // POST a new todo item
-app.post('/todos', (req, res) => {
+app.post('/todos', middleware.authRequired, (req, res) => {
 	// Ensure only specific attributes from the body are retreived
 	let body = _.pick(req.body, 'description', 'completed'); //http://underscorejs.org/#pick
 
@@ -67,7 +75,18 @@ app.post('/todos', (req, res) => {
 		body.description = body.description.trim();
 
 		db.todo.create(body)
-			.then(todo => res.json(todo))
+			.then(todo => { 
+				// Add the newly created todo item to the logged in user (Set Association)
+				return Promise.all([todo, req.user.addTodo(todo)]);
+			})
+			.then(result => {
+				// Reload the todo item because it has now been associated with a user
+				return result[0].reload();
+			})
+			.then(todo => {
+				// Send the newly reloaded todo item (post assoc)
+				res.json(todo);
+			})
 			.catch(err => res.status(500).json(err));
 	} else {
 		res.status(400).send();
@@ -77,12 +96,15 @@ app.post('/todos', (req, res) => {
 });
 
 // DELETE a todo item
-app.delete('/todos/:id', (req, res) => {
+app.delete('/todos/:id', middleware.authRequired, (req, res) => {
 	let todoId = parseInt(req.params.id, 10);
 
 	// http://docs.sequelizejs.com/en/latest/api/model/#destroyoptions-promiseinteger
 	db.todo.destroy({
-		where: { id: todoId }
+		where: { 
+			userId: req.user.id,
+			id: todoId 
+		}
 	})
 	.then(numRowsDeleted => {
 		if (numRowsDeleted) {
@@ -95,7 +117,7 @@ app.delete('/todos/:id', (req, res) => {
 });
 
 // PUT for a todo item
-app.put('/todos/:id', (req, res) => {
+app.put('/todos/:id', middleware.authRequired, (req, res) => {
 	let todoId = parseInt(req.params.id, 10);
 
 	// Ensure only specific attributes from the body are retreived
@@ -111,7 +133,12 @@ app.put('/todos/:id', (req, res) => {
 		attributes.completed = body.completed;	
 	}
 
-	db.todo.findById(todoId)
+	db.todo.findOne({
+			where: {
+				userId: req.user.id,
+				id: todoId
+			}
+		})
 		.then(todo => {
 			if (todo) {
 				// http://docs.sequelizejs.com/en/latest/api/instance/#updateupdates-options-promisethis
@@ -139,7 +166,13 @@ app.post('/users/login', (req, res) => {
 	let body = _.pick(req.body, 'email', 'password');
 
 	db.user.authenticate(body)
-		.then(user => res.json(user))
+		.then(user => {
+			let generatedAuthToken = user.generateToken('authentication');
+
+			if (generatedAuthToken) {
+				res.header('Auth', generatedAuthToken).json(user.toPublicJSON());				
+			}
+		})
 		.catch(err => res.status(401).send());
 });
 
