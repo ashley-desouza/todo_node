@@ -170,10 +170,22 @@ app.post('/users/login', (req, res) => {
 			let generatedAuthToken = user.generateToken('authentication');
 
 			if (generatedAuthToken) {
-				res.header('Auth', generatedAuthToken).json(user.toPublicJSON());				
+				return Promise.all([user, db.token.create({ token: generatedAuthToken })]);
 			}
 		})
-		.catch(err => res.status(401).send());
+		.then(result => {
+			res.header('Auth', result[1].token).json(result[0].toPublicJSON());
+		})
+		.catch(err => {
+			return res.status(401).send()
+		});
+});
+
+// POST to logout users
+app.post('/users/logout', middleware.authRequired, (req, res) => {
+	req.token.destroy()
+		.then(() => res.status(204).send())
+		.catch(err => res.status(500).send());
 });
 
 // IMP: Setup the db connection before starting the server

@@ -20,6 +20,7 @@ let db = {};
 // http://docs.sequelizejs.com/en/latest/docs/models-definition/
 db.todo = sequelize.import(__dirname + '/models/todo.js'); // This is IMP. It is a strict well-defined way of importing a sqlite db.
 db.user = sequelize.import(__dirname + '/models/user.js');
+db.token = sequelize.import(__dirname + '/models/token.js');
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
